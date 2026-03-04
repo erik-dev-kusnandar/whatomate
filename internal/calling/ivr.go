@@ -42,7 +42,10 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 
 	// Initialize IVR context — load existing path for goto_flow continuity
 	ivrCtx := &IVRContext{
-		Variables:   make(map[string]string),
+		Variables: map[string]string{
+			"caller_phone": session.CallerPhone,
+			"call_id":      session.ID,
+		},
 		CallerPhone: session.CallerPhone,
 		CallID:      session.ID,
 		CurrentNode: graph.EntryNode,
@@ -122,7 +125,7 @@ func (m *Manager) executeNodeLoop(session *CallSession, waAccount *whatsapp.Acco
 		case IVRNodeGreeting:
 			outcome = m.executeGreeting(session, node, player)
 		case IVRNodeMenu:
-			outcome = m.executeMenu(session, node, player)
+			outcome = m.executeMenu(session, node, ctx, player)
 		case IVRNodeGather:
 			outcome = m.executeGather(session, node, ctx, player)
 		case IVRNodeHTTPCallback:
@@ -187,7 +190,7 @@ func (m *Manager) executeGreeting(session *CallSession, node *IVRNode, player *A
 // configured options, and retries on timeout or invalid digit.
 // Returns "digit:N" on valid input, "timeout" on single-attempt timeout,
 // or "max_retries" when all attempts are exhausted.
-func (m *Manager) executeMenu(session *CallSession, node *IVRNode, player *AudioPlayer) string {
+func (m *Manager) executeMenu(session *CallSession, node *IVRNode, ctx *IVRContext, player *AudioPlayer) string {
 	audioFile, _ := node.Config["audio_file"].(string)
 	timeoutSecs := getConfigInt(node.Config, "timeout_seconds", 10)
 	maxRetries := getConfigInt(node.Config, "max_retries", 3)
@@ -247,6 +250,9 @@ func (m *Manager) executeMenu(session *CallSession, node *IVRNode, player *Audio
 
 		digitStr := string(digit)
 		if len(validDigits) == 0 || validDigits[digitStr] {
+			// Store the selected digit in context for use by subsequent nodes
+			ctx.Variables["menu_"+node.ID] = digitStr
+			ctx.Variables["last_menu_digit"] = digitStr
 			return fmt.Sprintf("digit:%s", digitStr)
 		}
 
