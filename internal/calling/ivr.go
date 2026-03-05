@@ -481,6 +481,14 @@ func (m *Manager) executeHangup(session *CallSession, node *IVRNode, ctx *IVRCon
 		}
 	}
 
+	// Mark as system-initiated hangup before terminating so the webhook
+	// handler (which defaults to "client") doesn't overwrite it.
+	if session.CallLogID != uuid.Nil {
+		m.db.Model(&models.CallLog{}).
+			Where("id = ?", session.CallLogID).
+			Update("disconnected_by", models.DisconnectedBySystem)
+	}
+
 	m.saveIVRPath(session, ctx.Path)
 	m.terminateCall(session, waAccount)
 }
