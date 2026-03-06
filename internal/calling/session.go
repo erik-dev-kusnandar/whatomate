@@ -518,16 +518,6 @@ func (m *Manager) terminateCallBySession(session *CallSession) {
 	}
 }
 
-// updateCallLog updates arbitrary fields on a CallLog record by ID.
-func (m *Manager) updateCallLog(callLogID uuid.UUID, fields map[string]any) {
-	if callLogID == uuid.Nil {
-		return
-	}
-	if err := m.db.Model(&models.CallLog{}).Where("id = ?", callLogID).Updates(fields).Error; err != nil {
-		m.log.Error("Failed to update call log", "error", err, "call_log_id", callLogID)
-	}
-}
-
 // durationSince calculates seconds elapsed since a given time, returning 0 if
 // the pointer is nil.
 func durationSince(from *time.Time, now time.Time) int {
