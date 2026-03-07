@@ -508,12 +508,28 @@ func (m *Manager) EndTransfer(transferID uuid.UUID) {
 	session.AgentPC = nil
 	session.mu.Unlock()
 
-	// Stop/close resources outside lock
+	// Stop/close resources outside lock.
+	// Save last RTP seq so the post-transfer IVR player can continue
+	// from the correct sequence number. Use hold player first (always
+	// present), then override with bridge if an agent was connected.
+	if holdPlayer != nil {
+		seq, ts := holdPlayer.Sequence()
+		session.mu.Lock()
+		session.LastRTPSeq = seq
+		session.LastRTPTimestamp = ts
+		session.mu.Unlock()
+		holdPlayer.Stop()
+	}
 	if bridge != nil {
 		bridge.Stop()
-	}
-	if holdPlayer != nil {
-		holdPlayer.Stop()
+		bridge.Wait() // Wait for goroutines to finish so lastCallerSeq is final.
+		seq, ts := bridge.LastCallerSeq()
+		if seq > 0 {
+			session.mu.Lock()
+			session.LastRTPSeq = seq
+			session.LastRTPTimestamp = ts
+			session.mu.Unlock()
+		}
 	}
 	if transferCancel != nil {
 		transferCancel()
@@ -567,6 +583,18 @@ func (m *Manager) EndTransfer(transferID uuid.UUID) {
 	session.mu.Unlock()
 
 	if transferDone != nil {
+		// Reset BridgeStarted and restart caller track consumption so
+		// Pion's receive buffer doesn't fill up (same pattern as
+		// InitiateAgentTransfer). Use consumeAudioWithDTMF so that
+		// post-transfer IVR nodes (menu, gather) can receive DTMF.
+		session.mu.Lock()
+		session.BridgeStarted = make(chan struct{})
+		callerRemote := session.CallerRemoteTrack
+		session.mu.Unlock()
+		if callerRemote != nil {
+			go m.consumeAudioWithDTMF(session, callerRemote)
+		}
+
 		transferDone <- "completed"
 	} else {
 		// Terminal transfer — terminate the WhatsApp call and clean up.
@@ -605,9 +633,12 @@ func (m *Manager) waitForTransferTimeout(ctx context.Context, session *CallSessi
 		Where("id = ?", session.CallLogID).
 		Update("disconnected_by", models.DisconnectedBySystem)
 
-	// Stop hold music
+	// Stop hold music and save RTP seq for post-transfer IVR player
 	session.mu.Lock()
 	if session.HoldPlayer != nil {
+		seq, ts := session.HoldPlayer.Sequence()
+		session.LastRTPSeq = seq
+		session.LastRTPTimestamp = ts
 		session.HoldPlayer.Stop()
 	}
 	session.mu.Unlock()
@@ -627,6 +658,16 @@ func (m *Manager) waitForTransferTimeout(ctx context.Context, session *CallSessi
 	session.mu.Unlock()
 
 	if transferDone != nil {
+		// Restart caller track consumption with DTMF detection for
+		// post-transfer IVR nodes.
+		session.mu.Lock()
+		session.BridgeStarted = make(chan struct{})
+		callerRemote := session.CallerRemoteTrack
+		session.mu.Unlock()
+		if callerRemote != nil {
+			go m.consumeAudioWithDTMF(session, callerRemote)
+		}
+
 		transferDone <- "no_answer"
 	} else {
 		m.cleanupSession(session.ID)

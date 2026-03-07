@@ -130,7 +130,11 @@ func (m *Manager) executeNodeLoop(session *CallSession, waAccount *whatsapp.Acco
 			if outcome == "" {
 				return // terminal — no next node
 			}
-			// falls through to edge resolution below
+			// Transfer created a fresh IVRPlayer — pick it up so subsequent
+			// nodes use the correct RTP sequence.
+			session.mu.Lock()
+			player = session.IVRPlayer
+			session.mu.Unlock()
 		case IVRNodeGotoFlow:
 			ctx.Path = append(ctx.Path, map[string]string{
 				"node": node.ID, "type": string(node.Type), "label": node.Label,
@@ -428,18 +432,12 @@ func (m *Manager) executeTransfer(session *CallSession, node *IVRNode, ctx *IVRC
 
 	m.log.Info("Transfer done, resuming IVR", "call_id", session.ID, "outcome", outcome)
 
-	// Create a fresh IVRPlayer for post-transfer audio. The bridge may have
-	// advanced the RTP sequence numbers, so we pick up from where it left off.
+	// Create a fresh IVRPlayer for post-transfer audio. EndTransfer saved
+	// the last RTP seq/ts from the bridge so we can continue from there.
 	session.mu.Lock()
-	bridge := session.Bridge
-	var lastSeq uint16
-	var lastTS uint32
-	if bridge != nil {
-		lastSeq, lastTS = bridge.LastCallerSeq()
-	}
 	player := NewAudioPlayer(session.AudioTrack)
-	if lastSeq > 0 {
-		player.SetSequence(lastSeq, lastTS)
+	if session.LastRTPSeq > 0 {
+		player.SetSequence(session.LastRTPSeq, session.LastRTPTimestamp)
 	}
 	session.IVRPlayer = player
 	session.mu.Unlock()
