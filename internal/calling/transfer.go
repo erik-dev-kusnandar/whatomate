@@ -90,7 +90,7 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 		teamIDStr = teamID.String()
 	}
 
-	m.broadcastEvent(transfer.OrganizationID, websocket.TypeCallTransferWaiting, map[string]any{
+	payload := map[string]any{
 		"id":               transfer.ID.String(),
 		"call_log_id":      transfer.CallLogID.String(),
 		"whatsapp_call_id": transfer.WhatsAppCallID,
@@ -99,7 +99,19 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 		"whatsapp_account": transfer.WhatsAppAccount,
 		"team_id":          teamIDStr,
 		"transferred_at":   transfer.TransferredAt.Format(time.RFC3339),
-	})
+	}
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeCallTransferWaiting,
+		Payload: payload,
+	}
+
+	if teamID != nil {
+		// Team-scoped: notify only team members
+		m.broadcastToTeam(transfer.OrganizationID, *teamID, msg)
+	} else {
+		// No team: notify entire org
+		m.broadcastEvent(transfer.OrganizationID, websocket.TypeCallTransferWaiting, payload)
+	}
 
 	m.log.Info("Call transfer initiated",
 		"call_id", session.ID,
@@ -284,14 +296,19 @@ func (m *Manager) InitiateAgentTransfer(callLogID, initiatingAgentID uuid.UUID, 
 		"transferred_at":     transfer.TransferredAt.Format(time.RFC3339),
 	}
 
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeCallTransferWaiting,
+		Payload: payload,
+	}
+
 	if targetAgentID != nil {
 		// Direct transfer: notify only the target agent
-		m.wsHub.BroadcastToUser(session.OrganizationID, *targetAgentID, websocket.WSMessage{
-			Type:    websocket.TypeCallTransferWaiting,
-			Payload: payload,
-		})
+		m.wsHub.BroadcastToUser(session.OrganizationID, *targetAgentID, msg)
+	} else if teamID != nil {
+		// Team transfer: notify only team members
+		m.broadcastToTeam(session.OrganizationID, *teamID, msg)
 	} else {
-		// Team transfer: broadcast to entire org
+		// No target: notify entire org
 		m.broadcastEvent(session.OrganizationID, websocket.TypeCallTransferWaiting, payload)
 	}
 

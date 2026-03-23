@@ -497,6 +497,29 @@ func (m *Manager) broadcastEvent(orgID uuid.UUID, eventType string, payload map[
 	})
 }
 
+// broadcastToTeam sends a WebSocket message only to members of a specific team.
+func (m *Manager) broadcastToTeam(orgID, teamID uuid.UUID, msg websocket.WSMessage) {
+	if m.wsHub == nil {
+		return
+	}
+	var memberIDs []uuid.UUID
+	if err := m.db.Table("team_members").
+		Select("user_id").
+		Where("team_id = ? AND deleted_at IS NULL", teamID).
+		Pluck("user_id", &memberIDs).Error; err != nil {
+		m.log.Error("Failed to fetch team members for broadcast", "error", err, "team_id", teamID)
+		// Fall back to org-wide broadcast so the call isn't silently lost
+		m.wsHub.BroadcastToOrg(orgID, msg)
+		return
+	}
+	if len(memberIDs) == 0 {
+		// No members — broadcast to org so someone can pick up
+		m.wsHub.BroadcastToOrg(orgID, msg)
+		return
+	}
+	m.wsHub.BroadcastToUsers(orgID, memberIDs, msg)
+}
+
 // setupAudioBridge creates per-direction recorders (if enabled), builds an
 // AudioBridge, and assigns everything to the session under its lock.
 // If recorders already exist on the session (e.g. after a transfer), they are
