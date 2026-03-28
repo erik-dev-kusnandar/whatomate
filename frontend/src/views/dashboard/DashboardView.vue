@@ -422,8 +422,16 @@ const formatTime = (dateStr: string): string => {
 }
 
 const getWidgetColor = (color: string) => {
+  const gradientMap: Record<string, string> = {
+    blue: 'bg-gradient-to-r from-blue-500/60 to-blue-500/0',
+    green: 'bg-gradient-to-r from-emerald-500/60 to-emerald-500/0',
+    purple: 'bg-gradient-to-r from-violet-500/60 to-violet-500/0',
+    orange: 'bg-gradient-to-r from-amber-500/60 to-amber-500/0',
+    red: 'bg-gradient-to-r from-rose-500/60 to-rose-500/0',
+    cyan: 'bg-gradient-to-r from-cyan-500/60 to-cyan-500/0'
+  }
   const colorConfig = colorOptions.value.find(c => c.value === color) || colorOptions.value[0]
-  return colorConfig
+  return { ...colorConfig, gradient: gradientMap[colorConfig.value] || gradientMap.blue }
 }
 
 const getWidgetIcon = (dataSource: string) => {
@@ -915,6 +923,9 @@ onMounted(() => {
               v-if="getWidgetById(item.i) && isNumberWidget(getWidgetById(item.i)!)"
               class="group relative h-full card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
             >
+              <!-- Gradient accent bar -->
+              <div :class="['absolute top-0 inset-x-0 h-0.5', getWidgetColor(getWidgetById(item.i)!.color).gradient]" />
+
               <!-- Drag handle indicator -->
               <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
                 <GripVertical class="h-4 w-4" />
@@ -963,7 +974,9 @@ onMounted(() => {
                     <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
                   </template>
                   <template v-else>
-                    {{ formatNumber(widgetData[item.i]?.value || 0) }}
+                    <Transition name="counter-fade" mode="out-in">
+                      <span :key="widgetData[item.i]?.value">{{ formatNumber(widgetData[item.i]?.value || 0) }}</span>
+                    </Transition>
                   </template>
                 </div>
                 <div v-if="getWidgetById(item.i)!.show_change && widgetData[item.i]" class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
@@ -1519,5 +1532,19 @@ onMounted(() => {
 /* Ensure grid items don't overflow */
 .vue-grid-item {
   transition: all 200ms ease;
+}
+
+/* Animated counter transition */
+.counter-fade-enter-active,
+.counter-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.counter-fade-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.counter-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 </style>
