@@ -17,6 +17,31 @@ var skipFields = map[string]bool{
 	"created_by": true, "updated_by": true,
 	"organization": true, "members": true,
 	"webhook_verify_token": true,
+	"api_config":           true,
+	"conditions":           true,
+	"active_from":          true,
+	"active_until":         true,
+	"whatsapp_account":     true,
+	"case_sensitive":       true,
+	"completion_config":    true,
+	"panel_config":         true,
+	"canvas_layout":        true,
+	"steps":                true,
+	"initial_template":     true,
+	"cancel_keywords":      true,
+	"trigger_button_id":    true,
+	"initial_message_type": true,
+	"initial_template_id":  true,
+	"timeout_message":      true,
+	"menu":                 true,
+	"welcome_audio_url":    true,
+}
+
+// flattenFields extracts readable sub-fields from JSONB objects.
+// e.g. response_content: {body: "hello", buttons: [...]} becomes
+// "response_message": "hello" (buttons are skipped).
+var flattenFields = map[string]string{
+	"response_content": "body",
 }
 
 // ComputeChanges compares old and new structs via JSON serialization.
@@ -56,6 +81,17 @@ func ComputeChanges(oldData, newData any) []map[string]any {
 			continue
 		}
 		oldVal := oldMap[key]
+		// Flatten JSONB fields: extract a specific sub-key as a readable field
+		if subKey, ok := flattenFields[key]; ok {
+			oldSub := extractSubField(oldVal, subKey)
+			newSub := extractSubField(newVal, subKey)
+			if !jsonEqual(oldSub, newSub) {
+				changes = append(changes, map[string]any{
+					"field": key, "old_value": oldSub, "new_value": newSub,
+				})
+			}
+			continue
+		}
 		if !jsonEqual(oldVal, newVal) {
 			changes = append(changes, map[string]any{
 				"field": key, "old_value": oldVal, "new_value": newVal,
@@ -104,6 +140,13 @@ func LogAudit(
 			slog.Error("failed to create audit log", "error", err)
 		}
 	}()
+}
+
+func extractSubField(val any, key string) any {
+	if m, ok := val.(map[string]any); ok {
+		return m[key]
+	}
+	return nil
 }
 
 // GetUserName fetches a user's full name for audit logging.

@@ -58,6 +58,8 @@ import draggable from 'vuedraggable'
 import FlowChart from '@/components/chatbot/flow-builder/FlowChart.vue'
 import FlowPreviewPanel from '@/components/chatbot/flow-preview/FlowPreviewPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
+import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
+import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 
 interface ApiConfig {
   url: string
@@ -157,6 +159,7 @@ const previewMode = ref<'edit' | 'preview'>('edit')
 const deleteStepDialogOpen = ref(false)
 const stepToDeleteIndex = ref<number | null>(null)
 const hasUnsavedChanges = ref(false)
+const auditRefreshKey = ref(0)
 const cancelDialogOpen = ref(false)
 const webhookHeadersOpen = ref(false)
 const listPickerOpen = ref(false)
@@ -294,7 +297,11 @@ const formData = ref({
   panel_config: { sections: [] } as PanelConfig,
   canvas_layout: {} as Record<string, any>,
   enabled: true,
-  steps: [] as FlowStep[]
+  steps: [] as FlowStep[],
+  created_at: '',
+  updated_at: '',
+  created_by_name: '',
+  updated_by_name: '',
 })
 
 const selectedStep = computed(() => {
@@ -471,6 +478,10 @@ async function loadFlow(id: string) {
       },
       canvas_layout: flow.canvas_layout || {},
       enabled: flow.is_enabled ?? flow.IsEnabled ?? flow.enabled ?? true,
+      created_at: flow.created_at || '',
+      updated_at: flow.updated_at || '',
+      created_by_name: flow.created_by_name || (flow.created_by?.full_name) || '',
+      updated_by_name: flow.updated_by_name || (flow.updated_by?.full_name) || '',
       steps: (flow.steps || flow.Steps || []).map((s: any, idx: number) => ({
         id: s.id || s.ID,
         step_name: s.step_name || s.StepName || `step_${idx + 1}`,
@@ -925,6 +936,7 @@ async function saveFlow() {
     }
 
     hasUnsavedChanges.value = false
+    auditRefreshKey.value++
     // Stay on page - don't navigate away
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.flow') }))
@@ -1444,6 +1456,17 @@ function confirmCancel() {
                 </div>
               </CollapsibleContent>
             </Collapsible>
+
+            <!-- Metadata -->
+            <template v-if="!isNewFlow">
+              <Separator />
+              <MetadataPanel
+                :created-at="formData.created_at"
+                :updated-at="formData.updated_at"
+                :created-by-name="formData.created_by_name"
+                :updated-by-name="formData.updated_by_name"
+              />
+            </template>
           </div>
         </ScrollArea>
 
@@ -1814,6 +1837,17 @@ function confirmCancel() {
         </div>
       </Card>
     </div>
+
+    <!-- Activity Log (collapsible at the bottom) -->
+    <Collapsible v-if="!isNewFlow && flowId" class="border-t">
+      <CollapsibleTrigger class="flex items-center justify-between w-full px-4 py-2 text-sm font-medium hover:bg-muted/50 transition-colors">
+        {{ $t('common.activityLog', 'Activity Log') }}
+        <ChevronDown class="h-4 w-4" />
+      </CollapsibleTrigger>
+      <CollapsibleContent class="px-4 pb-4">
+        <AuditLogPanel :key="auditRefreshKey" resource-type="chatbot_flow" :resource-id="flowId" />
+      </CollapsibleContent>
+    </Collapsible>
 
     <!-- Delete Step Dialog -->
     <AlertDialog v-model:open="deleteStepDialogOpen">

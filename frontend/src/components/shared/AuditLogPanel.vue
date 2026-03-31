@@ -31,7 +31,12 @@ function formatFieldName(field: string): string {
 function formatValue(val: any): string {
   if (val === null || val === undefined || val === '') return '—'
   if (typeof val === 'boolean') return val ? 'Yes' : 'No'
-  if (typeof val === 'object') return JSON.stringify(val)
+  if (Array.isArray(val)) return val.join(', ') || '—'
+  if (typeof val === 'object') {
+    // For simple objects with a "body" key (like response_content), show the body
+    if (val.body) return String(val.body)
+    return JSON.stringify(val)
+  }
   return String(val)
 }
 
@@ -68,7 +73,7 @@ onMounted(() => loadLogs())
 </script>
 
 <template>
-  <Card>
+  <Card class="overflow-hidden">
     <CardHeader class="pb-3">
       <div class="flex items-center gap-2">
         <History class="h-4 w-4 text-muted-foreground" />
@@ -115,12 +120,14 @@ onMounted(() => loadLogs())
               <div
                 v-for="(change, idx) in log.changes"
                 :key="idx"
-                class="text-xs rounded-md bg-muted/50 px-2.5 py-1.5 flex items-start gap-1.5"
+                class="text-xs rounded-md bg-muted/50 px-2.5 py-1.5 overflow-hidden"
               >
-                <span class="font-medium text-foreground shrink-0">{{ formatFieldName(change.field) }}:</span>
-                <span class="text-muted-foreground">{{ formatValue(change.old_value) }}</span>
-                <span class="text-muted-foreground">→</span>
-                <span class="text-foreground">{{ formatValue(change.new_value) }}</span>
+                <span class="font-medium text-foreground">{{ formatFieldName(change.field) }}:</span>
+                <div class="mt-0.5 text-muted-foreground break-words">
+                  <span>{{ formatValue(change.old_value) }}</span>
+                  <span class="mx-1">→</span>
+                  <span class="text-foreground">{{ formatValue(change.new_value) }}</span>
+                </div>
               </div>
             </div>
 
