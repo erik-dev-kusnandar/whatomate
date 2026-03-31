@@ -27,14 +27,13 @@ export async function expectSaveButtonOnChange(page: Page) {
 }
 
 export async function expectDeleteFromForm(page: Page, listUrl: string) {
-  // Dismiss any toast that might block clicks
-  const toast = page.locator('[data-sonner-toast]').first()
-  if (await toast.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await toast.click().catch(() => {})
-    await page.waitForTimeout(500)
-  }
+  // Remove toasts from DOM so they don't block clicks
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-sonner-toast]').forEach(el => el.remove())
+  })
+  await page.waitForTimeout(300)
 
-  const deleteBtn = page.getByRole('button', { name: /Delete/i })
+  const deleteBtn = page.getByRole('button', { name: /Delete/i }).first()
   if (await deleteBtn.isVisible()) {
     await deleteBtn.click()
     const dialog = page.locator('[role="alertdialog"]')

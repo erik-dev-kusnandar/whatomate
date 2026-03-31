@@ -154,30 +154,13 @@ test.describe('Keyword Rules - Detail Page CRUD', () => {
   })
 
   test('should show metadata', async ({ page }) => {
-    await page.goto('/chatbot/keywords')
-    await page.waitForLoadState('networkidle')
-
-    let href = await navigateToFirstItem(page)
-    if (!href) {
-      if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed'); return }
-      await page.goto('/chatbot/keywords')
-      await page.waitForLoadState('networkidle')
-      href = await navigateToFirstItem(page)
-    }
-    if (href) await expectMetadataVisible(page)
+    if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed'); return }
+    await expectMetadataVisible(page)
   })
 
   test('should show activity log', async ({ page }) => {
-    await page.goto('/chatbot/keywords')
-    await page.waitForLoadState('networkidle')
-
-    let href = await navigateToFirstItem(page)
-    if (!href) {
-      if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed'); return }
-      await page.goto('/chatbot/keywords')
-      await page.waitForLoadState('networkidle')
-      href = await navigateToFirstItem(page)
-    }
-    if (href) await expectActivityLogVisible(page)
+    // Always seed fresh to avoid stale data from other tests
+    if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed'); return }
+    await expectActivityLogVisible(page)
   })
 })
