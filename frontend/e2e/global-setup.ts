@@ -114,7 +114,6 @@ async function globalSetup() {
           full_name: user.full_name,
           role_id: roleId,
           is_active: true,
-          is_super_admin: user.role_name === 'admin',
         },
       })
 
