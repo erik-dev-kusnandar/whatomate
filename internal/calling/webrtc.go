@@ -276,7 +276,31 @@ func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
 		webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithSettingEngine(settingEngine),
 	)
-	return api.NewPeerConnection(config)
+
+	pc, err := api.NewPeerConnection(config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Debug: log ICE candidates and connection state to diagnose TURN issues.
+	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c == nil {
+			m.log.Debug("ICE gathering complete (no more candidates)")
+			return
+		}
+		m.log.Debug("ICE candidate gathered",
+			"type", c.Typ.String(),
+			"address", c.Address,
+			"port", c.Port,
+			"protocol", c.Protocol.String(),
+			"related", c.RelatedAddress,
+		)
+	})
+	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		m.log.Debug("ICE connection state changed", "state", state.String())
+	})
+
+	return pc, nil
 }
 
 // consumeAudioTrack reads and discards RTP packets to keep the stream active.
